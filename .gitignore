@@ -1,0 +1,4 @@
+.env
+wrangler.toml
+node_modules/
+src/db/migration/
