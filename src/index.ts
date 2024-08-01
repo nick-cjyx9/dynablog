@@ -3,6 +3,7 @@ import { env } from 'hono/adapter'
 import { type Context, Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/d1'
+import { githubAuth } from '@hono/oauth-providers/github'
 import * as schema from './db/schema'
 
 /**
@@ -25,8 +26,22 @@ const app = new Hono()
 
 app.use('/api/*', cors({ origin: ['https://nickchen.top', 'http://localhost:5050', 'https://www.nickchen.top'] }))
 
+// app.use(
+//   '/github',
+//   githubAuth({
+//     client_id: env<{ GITHUB_ID: string }>(c).GITHUB_ID,
+//     client_secret: env<{ GITHUB_SECRET: string }>(c).GITHUB_SECRET,
+//     scope: ['public_repo', 'read:user', 'user', 'user:email', 'user:follow'],
+//     oauthApp: true,
+//   }),
+// )
+
 app.get('/', (c) => {
   return c.text('Hello World from Hono')
+})
+
+app.all('/api/ping', (c) => {
+  return c.text('pong')
 })
 
 app.get('/api/blog/:id{[0-9]+}/context', async (c) => {
@@ -49,14 +64,14 @@ app.get('/api/blog/:id{[0-9]+}/context', async (c) => {
 })
   .post(async (c) => {
     const id = Number.parseInt(c.req.param('id') as string)
-    const { title } = c.req.query()
+    const { title, post_link } = c.req.query()
     const db = getDB(c)
     const blog = await db.select().from(schema.blog).where(eq(schema.blog.id, id))
     if (blog.length === 0) {
       try {
         return c.json({
           success: true,
-          value: await db.insert(schema.blog).values({ id, postLink: c.req.path, title }).returning(),
+          value: await db.insert(schema.blog).values({ id, postLink: post_link, title }).returning(),
         })
       }
       catch (e) {
@@ -112,7 +127,7 @@ app.post('/api/blog/:id{[0-9]+}/like', async (c) => {
     })
   }
   try {
-    const ips = [...(blog[0].likes?.split(',') as string[])]
+    const ips = (blog[0].likes?.split(',') as string[]).filter(ip => ip !== '')
     if (ips.includes(ip)) {
       return c.json({
         success: false,
@@ -143,13 +158,23 @@ app.post('/api/blog/:id{[0-9]+}/comments', async (c) => {
   const id = Number.parseInt(c.req.param('id'))
   const ip = encodeIP(c.req.header('CF-Connecting-IP') as string)
   const { to, value, isVisitor } = c.req.query()
+  // query() fucking my type
   const db = getDB(c)
   try {
-    if (isVisitor) {
-      await db.insert(schema.comment).values({ isVisitor: true, visitorIp: ip, value, commentPool: id, parent: Number.parseInt(to) })
+    const blog = await db.select().from(schema.blog).where(eq(schema.blog.id, id))
+    if (blog.length === 0) {
+      return c.json({
+        success: false,
+        message: 'blog not found',
+      })
+    }
+    if (Number.parseInt(isVisitor) === 1 || isVisitor === 'true') {
+      const comment_id = await db.insert(schema.comment).values({ isVisitor: true, visitorIp: ip, value, commentPool: id, parent: Number.parseInt(to) })
+        .returning({ id: schema.comment.id })
       return c.json({
         success: true,
         message: 'Commented',
+        value: comment_id[0].id,
       })
     }
     else {
@@ -189,6 +214,78 @@ app.post('/api/blog/:id{[0-9]+}/comments', async (c) => {
           message: 'Not allowed to delete a comment from another user',
         })
       }
+    }
+    catch (e) {
+      if (e instanceof Error) {
+        return c.json({
+          success: false,
+          message: e.message,
+        })
+      }
+    }
+  })
+
+app.post('/api/blog/:id{[0-9]+}/onBuild/genAISummary', async (c) => {
+  const { content, regen } = c.req.query()
+  const { AI } = env<{ AI: Ai }>(c)
+  const id = c.req.param('id')
+  const db = getDB(c)
+  const blog = await db.select().from(schema.blog).where(eq(schema.blog.id, Number.parseInt(id)))
+  if (blog.length === 0) {
+    return c.json({
+      success: false,
+      message: 'blog not found',
+    })
+  }
+  if (blog[0].aiSummary !== null || Number.parseInt(regen) !== 1) {
+    return c.json({
+      success: false,
+      message: 'there already exists a summary',
+    })
+  }
+
+  try {
+    const repl = (await AI.run('@cf/qwen/qwen1.5-14b-chat-awq', {
+      prompt: `
+      请概括一下这篇文章的内容：
+
+      ${content}
+      `,
+      max_tokens: 2048,
+      temperature: 0.7,
+    })) as { response: string }
+    const summary = repl.response
+    await db.update(schema.blog).set({ aiSummary: summary }).where(eq(schema.blog.id, Number.parseInt(id)))
+    return c.json({
+      success: true,
+      message: 'Summary generated',
+    })
+  }
+  catch (e) {
+    if (e instanceof Error) {
+      return c.json({
+        success: false,
+        message: e.message,
+      })
+    }
+  }
+})
+  .delete(async (c) => {
+    const { id } = c.req.param()
+    const db = getDB(c)
+    try {
+      const blog = await db.select().from(schema.blog).where(eq(schema.blog.id, Number.parseInt(id)))
+      if (blog.length === 0) {
+        return c.json({
+          success: false,
+          message: 'blog not found',
+        })
+      }
+      await db.update(schema.blog).set({ aiSummary: null }).where(eq(schema.blog.id, Number.parseInt(id)))
+      return c.json({
+        success: true,
+        message: 'Deleted',
+      })
     }
     catch (e) {
       if (e instanceof Error) {

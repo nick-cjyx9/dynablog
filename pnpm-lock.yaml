@@ -5,9 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 dependencies:
-  '@hono/swagger-ui':
-    specifier: ^0.4.0
-    version: 0.4.0(hono@4.5.3)
+  '@hono/oauth-providers':
+    specifier: ^0.6.0
+    version: 0.6.0(hono@4.5.3)
   dotenv:
     specifier: ^16.4.5
     version: 16.4.5
@@ -1222,10 +1222,11 @@ packages:
     engines: {node: '>=14'}
     dev: true
 
-  /@hono/swagger-ui@0.4.0(hono@4.5.3):
-    resolution: {integrity: sha512-8lF+dexzgV2HRM1R/gf49E5djroq4jVMYMSwLkSF9pT0I6sYhuqirFDCRFrBtbbLCBsKzw6f2MF5rS+WY3d7Nw==}
+  /@hono/oauth-providers@0.6.0(hono@4.5.3):
+    resolution: {integrity: sha512-ayfd+99dvrugmOA4aXHXbM0JPZ8vO0Aa1jcU5PdErRzSA0iIOHvMK5Wh5AwXDYAL9EvhKtEqe+fdRHo3pSPqIA==}
+    engines: {node: '>=18.4.0'}
     peerDependencies:
-      hono: '*'
+      hono: '>=3.*'
     dependencies:
       hono: 4.5.3
     dev: false

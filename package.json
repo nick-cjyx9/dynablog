@@ -14,7 +14,7 @@
     "lint:fix": "eslint . --fix"
   },
   "dependencies": {
-    "@hono/swagger-ui": "^0.4.0",
+    "@hono/oauth-providers": "^0.6.0",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.32.1",
     "drizzle-orm-sqlite": "^0.16.1",

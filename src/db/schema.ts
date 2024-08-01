@@ -6,7 +6,7 @@ export const blog = sqliteTable('blog', {
   title: text('title'),
   id: integer('id').primaryKey().notNull(),
   postLink: text('postLink').notNull().unique(),
-  likes: text('likes').default(''),
+  likes: text('likes').default('').notNull(),
   aiSummary: text('ai_summary'),
 })
 
