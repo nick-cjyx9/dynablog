@@ -24,7 +24,7 @@ function encodeIP(ip: string) {
 
 const app = new Hono()
 
-app.use('/api/*', cors({ origin: ['https://nickchen.top', 'http://localhost:5050', 'https://www.nickchen.top'] }))
+app.use('/api/*', cors({ origin: ['https://nickchen.top', 'http://localhost:5173/', 'https://www.nickchen.top'] }))
 
 // app.use(
 //   '/github',
@@ -42,6 +42,22 @@ app.get('/', (c) => {
 
 app.all('/api/ping', (c) => {
   return c.text('pong')
+})
+
+app.get('/api/blog/context', async (c) => {
+  const db = getDB(c)
+  const path = c.req.query('path')
+  const blog = await db.select().from(schema.blog).where(eq(schema.blog.postLink, path as string))
+  if (blog.length === 0) {
+    return c.json({
+      exist: false,
+      message: 'blog not found',
+    })
+  }
+  return c.json({
+    exist: true,
+    blog: blog[0],
+  })
 })
 
 app.get('/api/blog/:id{[0-9]+}/context', async (c) => {
@@ -62,32 +78,6 @@ app.get('/api/blog/:id{[0-9]+}/context', async (c) => {
   }
   return c.json(comments[0])
 })
-  .post(async (c) => {
-    const id = Number.parseInt(c.req.param('id') as string)
-    const { title, post_link } = c.req.query()
-    const db = getDB(c)
-    const blog = await db.select().from(schema.blog).where(eq(schema.blog.id, id))
-    if (blog.length === 0) {
-      try {
-        return c.json({
-          success: true,
-          value: await db.insert(schema.blog).values({ id, postLink: post_link, title }).returning(),
-        })
-      }
-      catch (e) {
-        if (e instanceof Error) {
-          return c.json({
-            success: false,
-            message: e.message,
-          })
-        }
-      }
-    }
-    return c.json({
-      success: false,
-      message: 'blog already exists',
-    })
-  })
   .delete(async (c) => {
     const id = Number.parseInt(c.req.param('id') as string)
     const db = getDB(c)
@@ -114,6 +104,32 @@ app.get('/api/blog/:id{[0-9]+}/context', async (c) => {
       }
     }
   })
+
+app.post('/api/blog/bind_new', async (c) => {
+  const { title, post_link } = c.req.query()
+  const db = getDB(c)
+  const blog = await db.select().from(schema.blog).where(eq(schema.blog.postLink, post_link))
+  if (blog.length === 0) {
+    try {
+      return c.json({
+        success: true,
+        value: await db.insert(schema.blog).values({ postLink: post_link, title }).returning(),
+      })
+    }
+    catch (e) {
+      if (e instanceof Error) {
+        return c.json({
+          success: false,
+          message: e.message,
+        })
+      }
+    }
+  }
+  return c.json({
+    success: false,
+    message: 'blog already exists',
+  })
+})
 
 app.post('/api/blog/:id{[0-9]+}/like', async (c) => {
   const id = Number.parseInt(c.req.param('id'))
@@ -226,7 +242,10 @@ app.post('/api/blog/:id{[0-9]+}/comments', async (c) => {
   })
 
 app.post('/api/blog/:id{[0-9]+}/onBuild/genAISummary', async (c) => {
-  const { content, regen } = c.req.query()
+  const body = await c.req.json()
+  const content = body.content
+  if (content === '')
+    return c.text('No content')
   const { AI } = env<{ AI: Ai }>(c)
   const id = c.req.param('id')
   const db = getDB(c)
@@ -237,7 +256,7 @@ app.post('/api/blog/:id{[0-9]+}/onBuild/genAISummary', async (c) => {
       message: 'blog not found',
     })
   }
-  if (blog[0].aiSummary !== null || Number.parseInt(regen) !== 1) {
+  if (blog[0].aiSummary !== null) {
     return c.json({
       success: false,
       message: 'there already exists a summary',
@@ -259,6 +278,7 @@ app.post('/api/blog/:id{[0-9]+}/onBuild/genAISummary', async (c) => {
     return c.json({
       success: true,
       message: 'Summary generated',
+      value: summary,
     })
   }
   catch (e) {
