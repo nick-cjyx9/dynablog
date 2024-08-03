@@ -1,3 +1,4 @@
+import process from 'node:process'
 import { cors } from 'hono/cors'
 import { env } from 'hono/adapter'
 import { type Context, Hono } from 'hono'
@@ -24,17 +25,17 @@ function encodeIP(ip: string) {
 
 const app = new Hono()
 
-app.use('/api/*', cors({ origin: ['https://nickchen.top', 'http://localhost:5173/', 'https://www.nickchen.top'] }))
+app.use('/api/*', cors({ origin: ['https://nickchen.top', 'localhost:5173', 'https://www.nickchen.top'] }))
 
-// app.use(
-//   '/github',
-//   githubAuth({
-//     client_id: env<{ GITHUB_ID: string }>(c).GITHUB_ID,
-//     client_secret: env<{ GITHUB_SECRET: string }>(c).GITHUB_SECRET,
-//     scope: ['public_repo', 'read:user', 'user', 'user:email', 'user:follow'],
-//     oauthApp: true,
-//   }),
-// )
+app.use(
+  '/github',
+  githubAuth({
+    client_id: process.env.GITHUB_ID,
+    client_secret: process.env.GITHUB_SECRET,
+    scope: ['public_repo', 'read:user', 'user', 'user:email', 'user:follow'],
+    oauthApp: true,
+  }),
+)
 
 app.get('/', (c) => {
   return c.text('Hello World from Hono')
